@@ -44,6 +44,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -452,135 +453,143 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
      * Also, it issues a "missing.this" error for static method annotated receivers.
      */
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public Void visitMethod(MethodTree node, Void p) {
-
-        // We copy the result from getAnnotatedType to ensure that
-        // circular types (e.g. K extends Comparable<K>) are represented
-        // by circular AnnotatedTypeMirrors, which avoids problems with
-        // later checks.
-        // TODO: Find a cleaner way to ensure circular AnnotatedTypeMirrors.
-        AnnotatedExecutableType methodType = atypeFactory.getAnnotatedType(node).deepCopy();
-        AnnotatedDeclaredType preMRT = visitorState.getMethodReceiver();
-        MethodTree preMT = visitorState.getMethodTree();
-        visitorState.setMethodReceiver(methodType.getReceiverType());
-        visitorState.setMethodTree(node);
-        ExecutableElement methodElement = TreeUtils.elementFromDeclaration(node);
-
+        IdentityHashMap prev = atypeFactory.enterCache();
         try {
-            if (InternalUtils.isAnonymousConstructor(node)) {
-                // We shouldn't dig deeper
-                return null;
-            }
+            // We copy the result from getAnnotatedType to ensure that
+            // circular types (e.g. K extends Comparable<K>) are represented
+            // by circular AnnotatedTypeMirrors, which avoids problems with
+            // later checks.
+            // TODO: Find a cleaner way to ensure circular AnnotatedTypeMirrors.
+            AnnotatedExecutableType methodType = atypeFactory.getAnnotatedType(node).deepCopy();
+            AnnotatedDeclaredType preMRT = visitorState.getMethodReceiver();
+            MethodTree preMT = visitorState.getMethodTree();
+            visitorState.setMethodReceiver(methodType.getReceiverType());
+            visitorState.setMethodTree(node);
+            ExecutableElement methodElement = TreeUtils.elementFromDeclaration(node);
 
-            // check method purity if needed
-            {
-                boolean anyPurityAnnotation = PurityUtils.hasPurityAnnotation(atypeFactory, node);
-                boolean checkPurityAlways = checker.hasOption("suggestPureMethods");
-                boolean checkPurityAnnotations = checker.hasOption("checkPurityAnnotations");
+            try {
+                if (InternalUtils.isAnonymousConstructor(node)) {
+                    // We shouldn't dig deeper
+                    return null;
+                }
 
-                if (checkPurityAnnotations && (anyPurityAnnotation || checkPurityAlways)) {
-                    // check "no" purity
-                    List<Pure.Kind> kinds = PurityUtils.getPurityKinds(atypeFactory, node);
-                    // @Deterministic makes no sense for a void method or constructor
-                    boolean isDeterministic = kinds.contains(Pure.Kind.DETERMINISTIC);
-                    if (isDeterministic) {
-                        if (TreeUtils.isConstructor(node)) {
-                            checker.report(
-                                    Result.warning("purity.deterministic.constructor"), node);
-                        } else if (InternalUtils.typeOf(node.getReturnType()).getKind()
-                                == TypeKind.VOID) {
-                            checker.report(
-                                    Result.warning("purity.deterministic.void.method"), node);
+                // check method purity if needed
+                {
+                    boolean anyPurityAnnotation =
+                            PurityUtils.hasPurityAnnotation(atypeFactory, node);
+                    boolean checkPurityAlways = checker.hasOption("suggestPureMethods");
+                    boolean checkPurityAnnotations = checker.hasOption("checkPurityAnnotations");
+
+                    if (checkPurityAnnotations && (anyPurityAnnotation || checkPurityAlways)) {
+                        // check "no" purity
+                        List<Pure.Kind> kinds = PurityUtils.getPurityKinds(atypeFactory, node);
+                        // @Deterministic makes no sense for a void method or constructor
+                        boolean isDeterministic = kinds.contains(Pure.Kind.DETERMINISTIC);
+                        if (isDeterministic) {
+                            if (TreeUtils.isConstructor(node)) {
+                                checker.report(
+                                        Result.warning("purity.deterministic.constructor"), node);
+                            } else if (InternalUtils.typeOf(node.getReturnType()).getKind()
+                                    == TypeKind.VOID) {
+                                checker.report(
+                                        Result.warning("purity.deterministic.void.method"), node);
+                            }
                         }
-                    }
 
-                    // Report errors if necessary.
-                    PurityResult r =
-                            PurityChecker.checkPurity(
-                                    node.getBody(),
-                                    atypeFactory,
-                                    checker.hasOption("assumeSideEffectFree"));
-                    if (!r.isPure(kinds)) {
-                        reportPurityErrors(r, node, kinds);
-                    }
-
-                    // Issue a warning if the method is pure, but not annotated
-                    // as such (if the feature is activated).
-                    if (checkPurityAlways) {
-                        Collection<Pure.Kind> additionalKinds = new HashSet<>(r.getTypes());
-                        additionalKinds.removeAll(kinds);
-                        if (TreeUtils.isConstructor(node)) {
-                            additionalKinds.remove(Pure.Kind.DETERMINISTIC);
+                        // Report errors if necessary.
+                        PurityResult r =
+                                PurityChecker.checkPurity(
+                                        node.getBody(),
+                                        atypeFactory,
+                                        checker.hasOption("assumeSideEffectFree"));
+                        if (!r.isPure(kinds)) {
+                            reportPurityErrors(r, node, kinds);
                         }
-                        if (!additionalKinds.isEmpty()) {
-                            if (additionalKinds.size() == 2) {
-                                checker.report(
-                                        Result.warning("purity.more.pure", node.getName()), node);
-                            } else if (additionalKinds.contains(Pure.Kind.SIDE_EFFECT_FREE)) {
-                                checker.report(
-                                        Result.warning(
-                                                "purity.more.sideeffectfree", node.getName()),
-                                        node);
-                            } else if (additionalKinds.contains(Pure.Kind.DETERMINISTIC)) {
-                                checker.report(
-                                        Result.warning("purity.more.deterministic", node.getName()),
-                                        node);
-                            } else {
-                                assert false : "BaseTypeVisitor reached undesirable state";
+
+                        // Issue a warning if the method is pure, but not annotated
+                        // as such (if the feature is activated).
+                        if (checkPurityAlways) {
+                            Collection<Pure.Kind> additionalKinds = new HashSet<>(r.getTypes());
+                            additionalKinds.removeAll(kinds);
+                            if (TreeUtils.isConstructor(node)) {
+                                additionalKinds.remove(Pure.Kind.DETERMINISTIC);
+                            }
+                            if (!additionalKinds.isEmpty()) {
+                                if (additionalKinds.size() == 2) {
+                                    checker.report(
+                                            Result.warning("purity.more.pure", node.getName()),
+                                            node);
+                                } else if (additionalKinds.contains(Pure.Kind.SIDE_EFFECT_FREE)) {
+                                    checker.report(
+                                            Result.warning(
+                                                    "purity.more.sideeffectfree", node.getName()),
+                                            node);
+                                } else if (additionalKinds.contains(Pure.Kind.DETERMINISTIC)) {
+                                    checker.report(
+                                            Result.warning(
+                                                    "purity.more.deterministic", node.getName()),
+                                            node);
+                                } else {
+                                    assert false : "BaseTypeVisitor reached undesirable state";
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Passing the whole method/constructor validates the return type
-            validateTypeOf(node);
+                // Passing the whole method/constructor validates the return type
+                validateTypeOf(node);
 
-            // Validate types in throws clauses
-            for (ExpressionTree thr : node.getThrows()) {
-                validateTypeOf(thr);
-            }
-
-            if (atypeFactory.getDependentTypesHelper() != null) {
-                atypeFactory.getDependentTypesHelper().checkMethod(node, methodType);
-            }
-
-            AnnotatedDeclaredType enclosingType =
-                    (AnnotatedDeclaredType)
-                            atypeFactory.getAnnotatedType(methodElement.getEnclosingElement());
-
-            // Find which method this overrides!
-            Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
-                    AnnotatedTypes.overriddenMethods(elements, atypeFactory, methodElement);
-            for (Map.Entry<AnnotatedDeclaredType, ExecutableElement> pair :
-                    overriddenMethods.entrySet()) {
-                AnnotatedDeclaredType overriddenType = pair.getKey();
-                AnnotatedExecutableType overriddenMethod =
-                        AnnotatedTypes.asMemberOf(
-                                types, atypeFactory, overriddenType, pair.getValue());
-                if (!checkOverride(node, enclosingType, overriddenMethod, overriddenType, p)) {
-                    // Stop at the first mismatch; this makes a difference only if
-                    // -Awarns is passed, in which case multiple warnings might be raised on
-                    // the same method, not adding any value. See Issue 373.
-                    break;
+                // Validate types in throws clauses
+                for (ExpressionTree thr : node.getThrows()) {
+                    validateTypeOf(thr);
                 }
+
+                if (atypeFactory.getDependentTypesHelper() != null) {
+                    atypeFactory.getDependentTypesHelper().checkMethod(node, methodType);
+                }
+
+                AnnotatedDeclaredType enclosingType =
+                        (AnnotatedDeclaredType)
+                                atypeFactory.getAnnotatedType(methodElement.getEnclosingElement());
+
+                // Find which method this overrides!
+                Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
+                        AnnotatedTypes.overriddenMethods(elements, atypeFactory, methodElement);
+                for (Map.Entry<AnnotatedDeclaredType, ExecutableElement> pair :
+                        overriddenMethods.entrySet()) {
+                    AnnotatedDeclaredType overriddenType = pair.getKey();
+                    AnnotatedExecutableType overriddenMethod =
+                            AnnotatedTypes.asMemberOf(
+                                    types, atypeFactory, overriddenType, pair.getValue());
+                    if (!checkOverride(node, enclosingType, overriddenMethod, overriddenType, p)) {
+                        // Stop at the first mismatch; this makes a difference only if
+                        // -Awarns is passed, in which case multiple warnings might be raised on
+                        // the same method, not adding any value. See Issue 373.
+                        break;
+                    }
+                }
+                return super.visitMethod(node, p);
+            } finally {
+                boolean abstractMethod =
+                        methodElement.getModifiers().contains(Modifier.ABSTRACT)
+                                || methodElement.getModifiers().contains(Modifier.NATIVE);
+
+                // check well-formedness of pre/postcondition
+                List<String> formalParamNames = new ArrayList<String>();
+                for (VariableTree param : node.getParameters()) {
+                    formalParamNames.add(param.getName().toString());
+                }
+                checkContractsAtMethodDeclaration(
+                        node, methodElement, formalParamNames, abstractMethod);
+
+                visitorState.setMethodReceiver(preMRT);
+                visitorState.setMethodTree(preMT);
             }
-            return super.visitMethod(node, p);
         } finally {
-            boolean abstractMethod =
-                    methodElement.getModifiers().contains(Modifier.ABSTRACT)
-                            || methodElement.getModifiers().contains(Modifier.NATIVE);
-
-            // check well-formedness of pre/postcondition
-            List<String> formalParamNames = new ArrayList<String>();
-            for (VariableTree param : node.getParameters()) {
-                formalParamNames.add(param.getName().toString());
-            }
-            checkContractsAtMethodDeclaration(
-                    node, methodElement, formalParamNames, abstractMethod);
-
-            visitorState.setMethodReceiver(preMRT);
-            visitorState.setMethodTree(preMT);
+            atypeFactory.exitCache(prev);
         }
     }
 

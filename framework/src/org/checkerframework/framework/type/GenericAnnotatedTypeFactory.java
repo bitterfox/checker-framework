@@ -1499,4 +1499,20 @@ public abstract class GenericAnnotatedTypeFactory<
     public CFGVisualizer<Value, Store, TransferFunction> getCFGVisualizer() {
         return cfgVisualizer;
     }
+
+    public IdentityHashMap<
+                    TransferInput<Value, Store>, IdentityHashMap<Node, TransferResult<Value, Store>>>
+            enterCache() {
+        return useFlow ? flowResult.enterCache() : null;
+    }
+
+    public void exitCache(
+            IdentityHashMap<
+                            TransferInput<Value, Store>,
+                            IdentityHashMap<Node, TransferResult<Value, Store>>>
+                    prev) {
+        if (useFlow) {
+            flowResult.exitCache(prev);
+        }
+    }
 }
