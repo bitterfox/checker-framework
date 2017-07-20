@@ -80,6 +80,7 @@ public class TreeBuilder {
                 if (t instanceof JCExpression) {
                     ((JCExpression) t).type = ((JCExpression) tree).type;
                 }
+                // FIXME
                 Field[] fields = t.getClass().getDeclaredFields();
                 for (Field f : fields) {
                     if ("sym".equals(f.getName())) {

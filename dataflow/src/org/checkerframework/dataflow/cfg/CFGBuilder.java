@@ -4107,10 +4107,16 @@ public class CFGBuilder {
                 extendWithExtendedNode(new UnconditionalJump(doneLabel));
             }
 
+            IdentityHashMap<Tree, Node> oldTreeLookupMap = treeLookupMap;
+            IdentityHashMap<Tree, Node> oldConvertedTreeLookupMap = convertedTreeLookupMap;
+            treeLookupMap = new IdentityHashMap<>();
+            convertedTreeLookupMap = new IdentityHashMap<>();
+
             if (exceptionalFinallyLabel != null) {
                 tryStack.popFrame();
                 addLabelForNextNode(exceptionalFinallyLabel);
-                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
+                //                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
+                BlockTree exceptionalFinallyBlock = finallyBlock;
                 scan(exceptionalFinallyBlock, p);
 
                 TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
@@ -4120,6 +4126,8 @@ public class CFGBuilder {
                                 throwableType);
                 throwing.setTerminatesExecution(true);
             }
+            treeLookupMap = oldTreeLookupMap;
+            convertedTreeLookupMap = oldConvertedTreeLookupMap;
 
             addLabelForNextNode(doneLabel);
 
