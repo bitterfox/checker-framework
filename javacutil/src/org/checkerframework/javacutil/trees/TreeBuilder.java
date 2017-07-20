@@ -17,11 +17,13 @@ import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.TreeCopier;
 import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Names;
+import java.lang.reflect.Field;
 import java.util.List;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -65,7 +67,31 @@ public class TreeBuilder {
 
     @SuppressWarnings("unchecked")
     public <T extends Tree> T copy(T target) {
-        JCTree tree = new TreeCopier<Void>(maker).<JCTree>copy((JCTree) target);
+        class MyTreeCopier extends TreeCopier<Void> {
+            public MyTreeCopier(TreeMaker M) {
+                super(M);
+            }
+
+            public <T extends JCTree> T copy(T tree, Void p) {
+                T t = super.copy(tree, p);
+                if (t instanceof JCExpression) {
+                    ((JCExpression) t).type = ((JCExpression) tree).type;
+                }
+                Field[] fields = t.getClass().getDeclaredFields();
+                for (Field f : fields) {
+                    if ("sym".equals(f.getName())) {
+                        try {
+                            f.set(t, f.get(tree));
+                        } catch (IllegalAccessException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+                return t;
+            }
+        }
+
+        JCTree tree = new MyTreeCopier(maker).<JCTree>copy((JCTree) target);
         return (T) tree;
     }
 
