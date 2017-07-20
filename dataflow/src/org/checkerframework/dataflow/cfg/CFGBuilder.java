@@ -4070,9 +4070,13 @@ public class CFGBuilder {
             }
 
             Label finallyLabel = null;
+            Label exceptionalFinallyLabel = null;
             if (finallyBlock != null) {
                 finallyLabel = new Label();
-                tryStack.pushFrame(new TryFinallyFrame(finallyLabel));
+                exceptionalFinallyLabel = new Label();
+
+                //                tryStack.pushFrame(new TryFinallyFrame(finallyLabel));
+                tryStack.pushFrame(new TryFinallyFrame(exceptionalFinallyLabel));
             }
 
             Label doneLabel = new Label();
@@ -4094,14 +4098,27 @@ public class CFGBuilder {
             }
 
             if (finallyLabel != null) {
-                tryStack.popFrame();
+                //                tryStack.popFrame();
                 addLabelForNextNode(finallyLabel);
                 scan(finallyBlock, p);
 
                 TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
-                extendWithNodeWithException(
-                        new MarkerNode(tree, "end of finally block", env.getTypeUtils()),
-                        throwableType);
+                extendWithNode(new MarkerNode(tree, "end of finally block", env.getTypeUtils()));
+                extendWithExtendedNode(new UnconditionalJump(doneLabel));
+            }
+
+            if (exceptionalFinallyLabel != null) {
+                tryStack.popFrame();
+                addLabelForNextNode(exceptionalFinallyLabel);
+                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
+                scan(exceptionalFinallyBlock, p);
+
+                TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
+                NodeWithExceptionsHolder throwing =
+                        extendWithNodeWithException(
+                                new MarkerNode(tree, "end of finally block", env.getTypeUtils()),
+                                throwableType);
+                throwing.setTerminatesExecution(true);
             }
 
             addLabelForNextNode(doneLabel);

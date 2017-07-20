@@ -17,6 +17,7 @@ import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.TreeCopier;
 import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.Context;
@@ -60,6 +61,12 @@ public class TreeBuilder {
         maker = TreeMaker.instance(context);
         names = Names.instance(context);
         symtab = Symtab.instance(context);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends Tree> T copy(T target) {
+        JCTree tree = new TreeCopier<Void>(maker).<JCTree>copy((JCTree) target);
+        return (T) tree;
     }
 
     /**

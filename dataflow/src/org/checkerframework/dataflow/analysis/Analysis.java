@@ -180,6 +180,8 @@ public class Analysis<
         assert isRunning == false;
         isRunning = true;
 
+        boolean inFinally = false;
+
         init(cfg);
 
         while (!worklist.isEmpty()) {
@@ -240,6 +242,7 @@ public class Analysis<
                                 eb.getExceptionalSuccessors().entrySet()) {
                             TypeMirror cause = e.getKey();
                             S exceptionalStore = transferResult.getExceptionalStore(cause);
+                            //                            System.out.println(exceptionalStore);
                             if (exceptionalStore != null) {
                                 for (Block exceptionSucc : e.getValue()) {
                                     addStoreBefore(
