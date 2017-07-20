@@ -74,6 +74,9 @@ public class TreeBuilder {
 
             public <T extends JCTree> T copy(T tree, Void p) {
                 T t = super.copy(tree, p);
+                if (t == null) {
+                    return null;
+                }
                 if (t instanceof JCExpression) {
                     ((JCExpression) t).type = ((JCExpression) tree).type;
                 }
