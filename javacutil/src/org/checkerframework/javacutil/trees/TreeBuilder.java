@@ -91,7 +91,7 @@ public class TreeBuilder {
             private TreeMaker M;
 
             public <T extends JCTree> T copy(T tree, P p) {
-                T t = super.copy(tree);
+                T t = super.copy(tree, p);
                 if (t == null) {
                     return null;
                 }
