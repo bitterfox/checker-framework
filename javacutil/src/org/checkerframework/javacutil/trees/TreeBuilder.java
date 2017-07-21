@@ -3,27 +3,47 @@ package org.checkerframework.javacutil.trees;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.MemberReferenceTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.TryTree;
 import com.sun.source.tree.TypeCastTree;
+import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAssignOp;
+import com.sun.tools.javac.tree.JCTree.JCBinary;
+import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
+import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
+import com.sun.tools.javac.tree.JCTree.JCIdent;
+import com.sun.tools.javac.tree.JCTree.JCLambda;
+import com.sun.tools.javac.tree.JCTree.JCMemberReference;
+import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.tree.JCTree.JCMethodInvocation;
+import com.sun.tools.javac.tree.JCTree.JCNewClass;
+import com.sun.tools.javac.tree.JCTree.JCTry;
+import com.sun.tools.javac.tree.JCTree.JCUnary;
+import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.tree.TreeCopier;
 import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Names;
-import java.lang.reflect.Field;
 import java.util.List;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -67,35 +87,131 @@ public class TreeBuilder {
 
     @SuppressWarnings("unchecked")
     public <T extends Tree> T copy(T target) {
-        class MyTreeCopier extends TreeCopier<Void> {
-            public MyTreeCopier(TreeMaker M) {
-                super(M);
-            }
+        class MyTreeCopier<P> extends TreeCopier<P> {
+            private TreeMaker M;
 
-            public <T extends JCTree> T copy(T tree, Void p) {
-                T t = super.copy(tree, p);
+            public <T extends JCTree> T copy(T tree, P p) {
+                T t = super.copy(tree);
                 if (t == null) {
                     return null;
                 }
-                if (t instanceof JCExpression) {
-                    ((JCExpression) t).type = ((JCExpression) tree).type;
-                }
-                // FIXME
-                Field[] fields = t.getClass().getDeclaredFields();
-                for (Field f : fields) {
-                    if ("sym".equals(f.getName())) {
-                        try {
-                            f.set(t, f.get(tree));
-                        } catch (IllegalAccessException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }
+
+                t.type = tree.type;
+                return t;
+            }
+
+            public MyTreeCopier(TreeMaker M) {
+                super(M);
+                this.M = M;
+            }
+
+            public JCTree visitCompoundAssignment(CompoundAssignmentTree node, P p) {
+                JCAssignOp t = (JCAssignOp) super.visitCompoundAssignment(node, p);
+                t.operator = ((JCAssignOp) node).operator;
+                return t;
+            }
+
+            public JCTree visitBinary(BinaryTree node, P p) {
+                JCBinary t = (JCBinary) super.visitBinary(node, p);
+                t.operator = ((JCBinary) node).operator;
+                return t;
+            }
+
+            //                public JCTree visitBreak(BreakTree node, P p) {
+            //                    JCBreak t = (JCBreak)node;
+            //                    return this.M.at(t.pos).Break(t.label);
+            //                    t.
+            //                }
+
+            public JCTree visitClass(ClassTree node, P p) {
+                JCClassDecl t = (JCClassDecl) super.visitClass(node, p);
+                t.sym = ((JCClassDecl) node).sym;
+                return t;
+            }
+
+            //                public JCTree visitContinue(ContinueTree node, P p) {
+            //                    JCContinue t = (JCContinue)node;
+            //                    return this.M.at(t.pos).Continue(t.label);
+            //                }
+
+            public JCTree visitIdentifier(IdentifierTree node, P p) {
+                JCIdent t = (JCIdent) super.visitIdentifier(node, p);
+                t.sym = ((JCIdent) node).sym;
+                return t;
+            }
+
+            public JCTree visitMethod(MethodTree node, P p) {
+                JCMethodDecl t = (JCMethodDecl) super.visitMethod(node, p);
+                t.sym = ((JCMethodDecl) node).sym;
+                return t;
+            }
+
+            public JCTree visitMethodInvocation(MethodInvocationTree node, P p) {
+                JCMethodInvocation t = (JCMethodInvocation) super.visitMethodInvocation(node, p);
+                t.varargsElement = ((JCMethodInvocation) node).varargsElement;
+                return t;
+            }
+
+            //                public JCTree visitNewArray(NewArrayTree node, P p) {
+            //                    JCNewArray t = (JCNewArray)node;
+            //                    JCExpression elemtype = (JCExpression)this.copy((JCTree)t.elemtype, p);
+            //                    com.sun.tools.javac.util.List<JCExpression> dims = this.copy(t.dims, p);
+            //                    com.sun.tools.javac.util.List<JCExpression> elems = this.copy(t.elems, p);
+            //                    return this.M.at(t.pos).NewArray(elemtype, dims, elems);
+            //                }
+
+            public JCTree visitNewClass(NewClassTree node, P p) {
+                JCNewClass t = (JCNewClass) node;
+                JCExpression encl = (JCExpression) super.visitNewClass(node, p);
+                t.constructor = ((JCNewClass) node).constructor;
+                t.constructorType = ((JCNewClass) node).constructorType;
+                t.varargsElement = ((JCNewClass) node).varargsElement;
+                return t;
+            }
+
+            public JCTree visitLambdaExpression(LambdaExpressionTree node, P p) {
+                JCLambda t = (JCLambda) super.visitLambdaExpression(node, p);
+                t.canCompleteNormally = ((JCLambda) node).canCompleteNormally;
+                return t;
+            }
+
+            public JCTree visitMemberSelect(MemberSelectTree node, P p) {
+                JCFieldAccess t = (JCFieldAccess) super.visitMemberSelect(node, p);
+                t.sym = ((JCFieldAccess) node).sym;
+                return t;
+            }
+
+            public JCTree visitMemberReference(MemberReferenceTree node, P p) {
+                JCMemberReference t = (JCMemberReference) super.visitMemberReference(node, p);
+                t.kind = ((JCMemberReference) node).kind;
+                t.sym = ((JCMemberReference) node).sym;
+                t.varargsElement = ((JCMemberReference) node).varargsElement;
+                t.refPolyKind = ((JCMemberReference) node).refPolyKind;
+                t.ownerAccessible = ((JCMemberReference) node).ownerAccessible;
+                t.overloadKind = ((JCMemberReference) node).overloadKind;
+                return t;
+            }
+
+            public JCTree visitTry(TryTree node, P p) {
+                JCTry t = (JCTry) super.visitTry(node, p);
+                t.finallyCanCompleteNormally = ((JCTry) node).finallyCanCompleteNormally;
+                return t;
+            }
+
+            public JCTree visitUnary(UnaryTree node, P p) {
+                JCUnary t = (JCUnary) super.visitUnary(node, p);
+                t.operator = ((JCUnary) node).operator;
+                return t;
+            }
+
+            public JCTree visitVariable(VariableTree node, P p) {
+                JCVariableDecl t = (JCVariableDecl) super.visitVariable(node, p);
+                t.sym = ((JCVariableDecl) node).sym;
                 return t;
             }
         }
 
-        JCTree tree = new MyTreeCopier(maker).<JCTree>copy((JCTree) target);
+        JCTree tree = new MyTreeCopier<Void>(maker).<JCTree>copy((JCTree) target);
         return (T) tree;
     }
 

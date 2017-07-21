@@ -4115,8 +4115,8 @@ public class CFGBuilder {
             if (exceptionalFinallyLabel != null) {
                 tryStack.popFrame();
                 addLabelForNextNode(exceptionalFinallyLabel);
-                //                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
-                BlockTree exceptionalFinallyBlock = finallyBlock;
+                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
+                //                BlockTree exceptionalFinallyBlock = finallyBlock;
                 scan(exceptionalFinallyBlock, p);
 
                 TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
