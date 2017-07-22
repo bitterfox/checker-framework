@@ -61,6 +61,7 @@ import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Type;
@@ -100,7 +101,9 @@ import org.checkerframework.dataflow.cfg.block.Block;
 import org.checkerframework.dataflow.cfg.block.Block.BlockType;
 import org.checkerframework.dataflow.cfg.block.BlockImpl;
 import org.checkerframework.dataflow.cfg.block.ConditionalBlockImpl;
+import org.checkerframework.dataflow.cfg.block.ExceptionBlock;
 import org.checkerframework.dataflow.cfg.block.ExceptionBlockImpl;
+import org.checkerframework.dataflow.cfg.block.RegularBlock;
 import org.checkerframework.dataflow.cfg.block.RegularBlockImpl;
 import org.checkerframework.dataflow.cfg.block.SingleSuccessorBlockImpl;
 import org.checkerframework.dataflow.cfg.block.SpecialBlock.SpecialBlockType;
@@ -801,6 +804,44 @@ public class CFGBuilder {
         public static ControlFlowGraph process(ControlFlowGraph cfg) {
             Set<Block> worklist = cfg.getAllBlocks();
             Set<Block> dontVisit = new HashSet<>();
+
+            final Set<Tree> contentes = new HashSet<>();
+            for (Block b : worklist) {
+                if (b instanceof RegularBlock) {
+                    for (Node n : ((RegularBlock) b).getContents()) {
+                        contentes.add(n.getTree());
+                    }
+                } else if (b instanceof ExceptionBlock) {
+                    contentes.add(((ExceptionBlock) b).getNode().getTree());
+                }
+            }
+
+            class MyScanner extends TreeScanner<Boolean, Void> {
+                boolean found = false;
+
+                @Override
+                public Boolean scan(Tree node, Void aVoid) {
+                    if (contentes.contains(node)) {
+                        return found = true;
+                    }
+                    return super.scan(node, aVoid);
+                }
+            }
+
+            IdentityHashMap<Tree, List<Tree>> newMap = new IdentityHashMap<>();
+            for (Entry<Tree, List<Tree>> e : cfg.generatedTreesLookupMap.entrySet()) {
+                Tree t = e.getKey();
+                List<Tree> newList = new ArrayList<>();
+                newMap.put(t, newList);
+                for (Tree root : e.getValue()) {
+                    MyScanner s = new MyScanner();
+                    s.scan(root, null);
+                    if (s.found) {
+                        newList.add(root);
+                    }
+                }
+            }
+            cfg.generatedTreesLookupMap = newMap;
 
             // note: this method has to be careful when relinking basic blocks
             // to not forget to adjust the predecessors, too
@@ -4117,17 +4158,11 @@ public class CFGBuilder {
             if (finallyLabel != null) {
                 tryStack.popFrame();
 
-                addLabelForNextNode(finallyLabel);
-                scan(finallyBlock, p);
+                boolean hasExceptionalPath = hasExceptionalPath(exceptionalFinallyLabel);
 
-                extendWithNode(new MarkerNode(tree, "end of finally block", env.getTypeUtils()));
-                extendWithExtendedNode(new UnconditionalJump(doneLabel));
-
-                if (hasExceptionalPath(exceptionalFinallyLabel)) {
+                if (hasExceptionalPath) {
                     addLabelForNextNode(exceptionalFinallyLabel);
-                    BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
-                    addToGeneratedTreesLookupMap(finallyBlock, exceptionalFinallyBlock);
-                    scan(exceptionalFinallyBlock, p);
+                    scan(finallyBlock, p);
 
                     TypeMirror throwableType =
                             elements.getTypeElement("java.lang.Throwable").asType();
@@ -4137,6 +4172,21 @@ public class CFGBuilder {
                                             tree, "end of finally block", env.getTypeUtils()),
                                     throwableType);
                     throwing.setTerminatesExecution(true);
+
+                    addLabelForNextNode(finallyLabel);
+                    BlockTree successfulFinallyBlock = treeBuilder.copy(finallyBlock);
+                    addToGeneratedTreesLookupMap(finallyBlock, successfulFinallyBlock);
+                    scan(successfulFinallyBlock, p);
+                    extendWithNode(
+                            new MarkerNode(tree, "end of finally block", env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(doneLabel));
+                } else {
+                    addLabelForNextNode(finallyLabel);
+                    scan(finallyBlock, p);
+
+                    extendWithNode(
+                            new MarkerNode(tree, "end of finally block", env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(doneLabel));
                 }
             }
 
