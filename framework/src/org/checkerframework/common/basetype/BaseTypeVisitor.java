@@ -37,6 +37,8 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreeScanner;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCBlock;
+import com.sun.tools.javac.tree.JCTree.JCTry;
 import com.sun.tools.javac.tree.TreeInfo;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -888,11 +890,14 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     @Override
     public Void visitTry(TryTree node, Void aVoid) {
         Void ret = super.visitTry(node, aVoid);
-        Tree finallyBlock = node.getFinallyBlock();
-        if (finallyBlock != null) {
-            for (Tree tree : atypeFactory.getGeneratedTrees(finallyBlock)) {
-                this.scan(tree, aVoid);
+        JCTry tree = (JCTry) node;
+        JCBlock finalizer = tree.finalizer;
+        if (finalizer != null) {
+            for (Tree generatedFinalizer : atypeFactory.getGeneratedTrees(finalizer)) {
+                tree.finalizer = (JCBlock) generatedFinalizer;
+                this.scan(generatedFinalizer, aVoid);
             }
+            tree.finalizer = finalizer;
         }
         return ret;
     }
