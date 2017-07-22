@@ -5,6 +5,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 */
 
 import com.sun.source.tree.Tree;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -107,8 +108,11 @@ public class AnalysisResult<A extends AbstractValue<A>, S extends Store<S>> {
         return treeLookup.get(tree);
     }
 
-    public /*@Nullable*/ List<Tree> getGeneratedTrees(Tree tree) {
-        return generatedTreesLookup.get(tree);
+    public List<Tree> getGeneratedTrees(Tree tree) {
+        if (generatedTreesLookup.containsKey(tree)) {
+            return generatedTreesLookup.get(tree);
+        }
+        return Collections.emptyList();
     }
 
     /** @return the store immediately before a given {@link Tree}. */

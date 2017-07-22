@@ -4115,32 +4115,48 @@ public class CFGBuilder {
             }
 
             if (finallyLabel != null) {
+                tryStack.popFrame();
+
                 addLabelForNextNode(finallyLabel);
                 scan(finallyBlock, p);
 
-                TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
                 extendWithNode(new MarkerNode(tree, "end of finally block", env.getTypeUtils()));
                 extendWithExtendedNode(new UnconditionalJump(doneLabel));
-            }
 
-            if (exceptionalFinallyLabel != null) {
-                tryStack.popFrame();
-                addLabelForNextNode(exceptionalFinallyLabel);
-                BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
-                addToGeneratedTreesLookupMap(finallyBlock, exceptionalFinallyBlock);
-                scan(exceptionalFinallyBlock, p);
+                if (hasExceptionalPath(exceptionalFinallyLabel)) {
+                    addLabelForNextNode(exceptionalFinallyLabel);
+                    BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
+                    addToGeneratedTreesLookupMap(finallyBlock, exceptionalFinallyBlock);
+                    scan(exceptionalFinallyBlock, p);
 
-                TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
-                NodeWithExceptionsHolder throwing =
-                        extendWithNodeWithException(
-                                new MarkerNode(tree, "end of finally block", env.getTypeUtils()),
-                                throwableType);
-                throwing.setTerminatesExecution(true);
+                    TypeMirror throwableType =
+                            elements.getTypeElement("java.lang.Throwable").asType();
+                    NodeWithExceptionsHolder throwing =
+                            extendWithNodeWithException(
+                                    new MarkerNode(
+                                            tree, "end of finally block", env.getTypeUtils()),
+                                    throwableType);
+                    throwing.setTerminatesExecution(true);
+                }
             }
 
             addLabelForNextNode(doneLabel);
 
             return null;
+        }
+
+        private boolean hasExceptionalPath(Label target) {
+            for (ExtendedNode node : nodeList) {
+                if (node instanceof NodeWithExceptionsHolder) {
+                    NodeWithExceptionsHolder exceptionalNode = (NodeWithExceptionsHolder) node;
+                    for (Set<Label> labels : exceptionalNode.getExceptions().values()) {
+                        if (labels.contains(target)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         @Override

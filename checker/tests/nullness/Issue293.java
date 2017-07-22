@@ -1,8 +1,8 @@
 // Test for Issue 293:
 // https://github.com/typetools/checker-framework/issues/293
-// @skip-test
+
 class Issue293 {
-    void foobar() {
+    void test1() {
         String s;
         try {
             s = read();
@@ -17,6 +17,14 @@ class Issue293 {
 
         // s is definitely initialized here.
         write(s);
+    }
+
+    void test2() {
+        String s = "";
+        try {
+        } finally {
+            write(s);
+        }
     }
 
     String read() throws Exception {
