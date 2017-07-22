@@ -1572,7 +1572,7 @@ public class CFGBuilder {
             assert generatedTree != null;
             assert !generatedTreesLookupMap.containsKey(tree);
             if (!generatedTreesLookupMap.containsKey(tree)) {
-                generatedTreesLookupMap.put(tree, new ArrayList<>());
+                generatedTreesLookupMap.put(tree, new ArrayList<Tree>());
             }
             generatedTreesLookupMap.get(tree).add(generatedTree);
         }
