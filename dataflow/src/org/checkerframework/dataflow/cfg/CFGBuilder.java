@@ -4093,7 +4093,6 @@ public class CFGBuilder {
                 finallyLabel = new Label();
                 exceptionalFinallyLabel = new Label();
 
-                //                tryStack.pushFrame(new TryFinallyFrame(finallyLabel));
                 tryStack.pushFrame(new TryFinallyFrame(exceptionalFinallyLabel));
             }
 
@@ -4116,7 +4115,6 @@ public class CFGBuilder {
             }
 
             if (finallyLabel != null) {
-                //                tryStack.popFrame();
                 addLabelForNextNode(finallyLabel);
                 scan(finallyBlock, p);
 
