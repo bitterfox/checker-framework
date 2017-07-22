@@ -862,6 +862,9 @@ public abstract class GenericAnnotatedTypeFactory<
     }
 
     public List<Tree> getGeneratedTrees(Tree tree) {
+        if (!useFlow) {
+            return Collections.emptyList();
+        }
         return flowResult.getGeneratedTrees(tree);
     }
 
