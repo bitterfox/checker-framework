@@ -28,6 +28,7 @@ import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.TryTree;
 import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.UnaryTree;
@@ -882,6 +883,18 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     var, iteratedType, node.getExpression(), "enhancedfor.type.incompatible");
         }
         return super.visitEnhancedForLoop(node, p);
+    }
+
+    @Override
+    public Void visitTry(TryTree node, Void aVoid) {
+        Void ret = super.visitTry(node, aVoid);
+        Tree finallyBlock = node.getFinallyBlock();
+        if (finallyBlock != null) {
+            for (Tree tree : atypeFactory.getGeneratedTrees(finallyBlock)) {
+                this.scan(tree, aVoid);
+            }
+        }
+        return ret;
     }
 
     /**

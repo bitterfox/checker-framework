@@ -61,6 +61,8 @@ public class ControlFlowGraph {
      */
     protected final List<ReturnNode> returnNodes;
 
+    protected IdentityHashMap<Tree, List<Tree>> generatedTreesLookupMap;
+
     public ControlFlowGraph(
             SpecialBlock entryBlock,
             SpecialBlockImpl regularExitBlock,
@@ -68,7 +70,8 @@ public class ControlFlowGraph {
             UnderlyingAST underlyingAST,
             IdentityHashMap<Tree, Node> treeLookup,
             IdentityHashMap<Tree, Node> convertedTreeLookup,
-            List<ReturnNode> returnNodes) {
+            List<ReturnNode> returnNodes,
+            IdentityHashMap<Tree, List<Tree>> generatedTreesLookupMap) {
         super();
         this.entryBlock = entryBlock;
         this.underlyingAST = underlyingAST;
@@ -77,6 +80,7 @@ public class ControlFlowGraph {
         this.regularExitBlock = regularExitBlock;
         this.exceptionalExitBlock = exceptionalExitBlock;
         this.returnNodes = returnNodes;
+        this.generatedTreesLookupMap = generatedTreesLookupMap;
     }
 
     /** @return the {@link Node} to which the {@link Tree} {@code t} corresponds. */
@@ -214,6 +218,10 @@ public class ControlFlowGraph {
     /** @return the tree-lookup map */
     public IdentityHashMap<Tree, Node> getTreeLookup() {
         return new IdentityHashMap<>(treeLookup);
+    }
+
+    public IdentityHashMap<Tree, List<Tree>> getGeneratedTreesLookup() {
+        return new IdentityHashMap<>(generatedTreesLookupMap);
     }
 
     /**

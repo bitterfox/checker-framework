@@ -1266,7 +1266,8 @@ public class CFGBuilder {
                     in.underlyingAST,
                     in.treeLookupMap,
                     in.convertedTreeLookupMap,
-                    in.returnNodes);
+                    in.returnNodes,
+                    in.generatedTreesLookupMap);
         }
     }
 
@@ -1287,6 +1288,7 @@ public class CFGBuilder {
         private final ArrayList<ExtendedNode> nodeList;
         private final Set<Integer> leaders;
         private final List<ReturnNode> returnNodes;
+        private final IdentityHashMap<Tree, List<Tree>> generatedTreesLookupMap;
 
         public PhaseOneResult(
                 UnderlyingAST underlyingAST,
@@ -1295,7 +1297,8 @@ public class CFGBuilder {
                 ArrayList<ExtendedNode> nodeList,
                 Map<Label, Integer> bindings,
                 Set<Integer> leaders,
-                List<ReturnNode> returnNodes) {
+                List<ReturnNode> returnNodes,
+                IdentityHashMap<Tree, List<Tree>> generatedTreesLookupMap) {
             this.underlyingAST = underlyingAST;
             this.treeLookupMap = treeLookupMap;
             this.convertedTreeLookupMap = convertedTreeLookupMap;
@@ -1303,6 +1306,7 @@ public class CFGBuilder {
             this.bindings = bindings;
             this.leaders = leaders;
             this.returnNodes = returnNodes;
+            this.generatedTreesLookupMap = generatedTreesLookupMap;
         }
 
         @Override
@@ -1423,6 +1427,8 @@ public class CFGBuilder {
          */
         private List<ReturnNode> returnNodes;
 
+        protected IdentityHashMap<Tree, List<Tree>> generatedTreesLookupMap;
+
         /** Nested scopes of try-catch blocks in force at the current program point. */
         private TryStack tryStack;
 
@@ -1460,6 +1466,7 @@ public class CFGBuilder {
             breakLabels = new HashMap<>();
             continueLabels = new HashMap<>();
             returnNodes = new ArrayList<>();
+            generatedTreesLookupMap = new IdentityHashMap<>();
 
             // traverse AST of the method body
             scan(bodyPath, null);
@@ -1479,7 +1486,8 @@ public class CFGBuilder {
                     nodeList,
                     bindings,
                     leaders,
-                    returnNodes);
+                    returnNodes,
+                    generatedTreesLookupMap);
         }
 
         public PhaseOneResult process(
@@ -1557,6 +1565,16 @@ public class CFGBuilder {
             assert tree != null;
             assert treeLookupMap.containsKey(tree);
             convertedTreeLookupMap.put(tree, node);
+        }
+
+        protected void addToGeneratedTreesLookupMap(Tree tree, Tree generatedTree) {
+            assert tree != null;
+            assert generatedTree != null;
+            assert !generatedTreesLookupMap.containsKey(tree);
+            if (!generatedTreesLookupMap.containsKey(tree)) {
+                generatedTreesLookupMap.put(tree, new ArrayList<>());
+            }
+            generatedTreesLookupMap.get(tree).add(generatedTree);
         }
 
         /**
@@ -4107,16 +4125,11 @@ public class CFGBuilder {
                 extendWithExtendedNode(new UnconditionalJump(doneLabel));
             }
 
-            IdentityHashMap<Tree, Node> oldTreeLookupMap = treeLookupMap;
-            IdentityHashMap<Tree, Node> oldConvertedTreeLookupMap = convertedTreeLookupMap;
-            treeLookupMap = new IdentityHashMap<>();
-            convertedTreeLookupMap = new IdentityHashMap<>();
-
             if (exceptionalFinallyLabel != null) {
                 tryStack.popFrame();
                 addLabelForNextNode(exceptionalFinallyLabel);
                 BlockTree exceptionalFinallyBlock = treeBuilder.copy(finallyBlock);
-                //                BlockTree exceptionalFinallyBlock = finallyBlock;
+                addToGeneratedTreesLookupMap(finallyBlock, exceptionalFinallyBlock);
                 scan(exceptionalFinallyBlock, p);
 
                 TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
@@ -4126,8 +4139,6 @@ public class CFGBuilder {
                                 throwableType);
                 throwing.setTerminatesExecution(true);
             }
-            treeLookupMap = oldTreeLookupMap;
-            convertedTreeLookupMap = oldConvertedTreeLookupMap;
 
             addLabelForNextNode(doneLabel);
 

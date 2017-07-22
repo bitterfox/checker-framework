@@ -861,6 +861,10 @@ public abstract class GenericAnnotatedTypeFactory<
         return flowResult.getNodeForTree(tree);
     }
 
+    public List<Tree> getGeneratedTrees(Tree tree) {
+        return flowResult.getGeneratedTrees(tree);
+    }
+
     /** @return the value of effectively final local variables */
     public HashMap<Element, Value> getFinalLocalValues() {
         return flowResult.getFinalLocalValues();
