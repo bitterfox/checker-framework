@@ -55,7 +55,7 @@ public class InitializationStore<V extends CFAbstractValue<V>, S extends Initial
 
         if (r instanceof FieldAccess) {
             FieldAccess fa = (FieldAccess) r;
-            if (!fieldValues.containsKey(fa)) {
+            if (!invariantFields.contains(fa)) {
                 InitializationAnnotatedTypeFactory<?, ?, ?, ?> atypeFactory =
                         (InitializationAnnotatedTypeFactory<?, ?, ?, ?>) analysis.getTypeFactory();
                 AnnotationMirror invariantAnno = atypeFactory.getFieldInvariantAnnotation();
