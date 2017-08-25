@@ -424,6 +424,8 @@ public abstract class SourceChecker extends AbstractTypeProcessor
     /** List of upstream checker names. Includes the current checker. */
     protected List<String> upstreamCheckerNames = null;
 
+    protected Set<String> supportedOptions;
+
     @Override
     public final synchronized void init(ProcessingEnvironment env) {
         super.init(env);
@@ -1731,7 +1733,11 @@ public abstract class SourceChecker extends AbstractTypeProcessor
     @Override
     public final String getOption(String name, String def) {
 
-        if (!this.getSupportedOptions().contains(name)) {
+        if (supportedOptions == null) {
+            supportedOptions = this.getSupportedOptions();
+        }
+
+        if (!supportedOptions.contains(name)) {
             ErrorReporter.errorAbort("Illegal option: " + name);
         }
 
