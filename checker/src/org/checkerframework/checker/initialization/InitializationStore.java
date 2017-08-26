@@ -1,11 +1,13 @@
 package org.checkerframework.checker.initialization;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.VariableElement;
+import org.checkerframework.dataflow.analysis.FlowExpressions;
 import org.checkerframework.dataflow.analysis.FlowExpressions.ClassName;
 import org.checkerframework.dataflow.analysis.FlowExpressions.FieldAccess;
 import org.checkerframework.dataflow.analysis.FlowExpressions.Receiver;
@@ -17,7 +19,6 @@ import org.checkerframework.framework.flow.CFAbstractStore;
 import org.checkerframework.framework.flow.CFAbstractValue;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.QualifierHierarchy;
-import org.checkerframework.javacutil.AnnotationUtils;
 
 /**
  * A store that extends {@code CFAbstractStore} and additionally tracks which fields of the 'self'
@@ -32,12 +33,12 @@ public class InitializationStore<V extends CFAbstractValue<V>, S extends Initial
     /** The set of fields that are initialized. */
     protected final Set<VariableElement> initializedFields;
     /** The set of fields that have 'invariant' annotation. */
-    protected final Set<FieldAccess> invariantFields;
+    protected final Map<FieldAccess, V> invariantFields;
 
     public InitializationStore(CFAbstractAnalysis<V, S, ?> analysis, boolean sequentialSemantics) {
         super(analysis, sequentialSemantics);
         initializedFields = new HashSet<>();
-        invariantFields = new HashSet<>();
+        invariantFields = new HashMap<>();
     }
 
     /**
@@ -64,22 +65,16 @@ public class InitializationStore<V extends CFAbstractValue<V>, S extends Initial
             if (qualifierHierarchy.isSubtype(a, invariantAnno)) {
                 if (r instanceof FieldAccess) {
                     FieldAccess fa = (FieldAccess) r;
+                    // Remember fields that have the 'invariant' annotation in the store.
+                    if (!invariantFields.containsKey(fa)) {
+                        invariantFields.put(
+                                fa,
+                                analysis.createSingleAnnotationValue(invariantAnno, r.getType()));
+                    }
                     if (fa.getReceiver() instanceof ThisReference
                             || fa.getReceiver() instanceof ClassName) {
                         addInitializedField(fa.getField());
                     }
-                }
-            }
-        }
-
-        // Remember fields that have the 'invariant' annotation in the store.
-        if (r instanceof FieldAccess) {
-            FieldAccess fa = (FieldAccess) r;
-            if (!fieldValues.containsKey(fa)) {
-                Set<AnnotationMirror> declaredAnnos =
-                        atypeFactory.getAnnotatedType(fa.getField()).getAnnotations();
-                if (AnnotationUtils.containsSame(declaredAnnos, invariantAnno)) {
-                    invariantFields.add(fa);
                 }
             }
         }
@@ -98,19 +93,21 @@ public class InitializationStore<V extends CFAbstractValue<V>, S extends Initial
                 ((InitializationAnnotatedTypeFactory<?, ?, ?, ?>) atypeFactory)
                         .getFieldInvariantAnnotation();
 
+        for (FieldAccess invariantField : invariantFields.keySet()) {
+            fieldValues.remove(invariantField);
+        }
+
         super.updateForMethodCall(n, atypeFactory, val);
 
         // Add invariant annotation again.
-        for (FieldAccess invariantField : invariantFields) {
-            insertValue(invariantField, fieldInvariantAnnotation);
-        }
+        fieldValues.putAll(invariantFields);
     }
 
     /** A copy constructor. */
     public InitializationStore(S other) {
         super(other);
         initializedFields = new HashSet<>(other.initializedFields);
-        invariantFields = new HashSet<>(other.invariantFields);
+        invariantFields = new HashMap<>(other.invariantFields);
     }
 
     /**
@@ -156,15 +153,38 @@ public class InitializationStore<V extends CFAbstractValue<V>, S extends Initial
 
     @Override
     public S leastUpperBound(S other) {
+        Map<FlowExpressions.FieldAccess, V> oldFieldValues = fieldValues;
+        fieldValues = new HashMap<>(fieldValues);
+        for (FieldAccess invariantField : invariantFields.keySet()) {
+            fieldValues.remove(invariantField);
+        }
+        Map<FlowExpressions.FieldAccess, V> oldOtherFieldValues = other.fieldValues;
+        other.fieldValues = new HashMap<>(other.fieldValues);
+        for (FieldAccess invariantField : other.invariantFields.keySet()) {
+            other.fieldValues.remove(invariantField);
+        }
         S result = super.leastUpperBound(other);
+        fieldValues = oldFieldValues;
+        other.fieldValues = oldOtherFieldValues;
 
         // Set intersection for initializedFields.
         result.initializedFields.addAll(other.initializedFields);
         result.initializedFields.retainAll(initializedFields);
 
         // Set intersection for invariantFields.
-        result.invariantFields.addAll(other.invariantFields);
-        result.invariantFields.retainAll(invariantFields);
+        result.invariantFields.putAll(other.invariantFields);
+        result.invariantFields.putAll(invariantFields);
+        //        result.invariantFields.retainAll(invariantFields);
+
+        // Add invariant annotation again.
+        //        for (Entry<FieldAccess, V> invariantField : invariantFields.entrySet()) {
+        ////            result.insertValue(invariantField.getKey(), invariantField.getValue());
+        //        }
+        //        for (Entry<FieldAccess, V> invariantField : other.invariantFields.entrySet()) {
+        ////            result.insertValue(invariantField.getKey(), invariantField.getValue());
+        //        }
+        result.fieldValues.putAll(invariantFields);
+        result.fieldValues.putAll(other.invariantFields);
 
         return result;
     }
